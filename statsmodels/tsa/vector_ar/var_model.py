@@ -191,7 +191,7 @@ def forecast_cov(ma_coefs, sigma_u, steps):
     for h in range(steps):
         # Sigma(h) = Sigma(h-1) + Phi Sig_u Phi'
         phi = ma_coefs[h]
-        var = phi @ sigma_u @ phi.T
+        var = phi @ sigma_u @ phi.conj().T
         forc_covs[h] = prior = prior + var
 
     return forc_covs
@@ -300,7 +300,7 @@ def var_loglike(resid, omega, nobs):
     omega : ndarray
         Sigma hat matrix.  Each element i,j is the average product of the
         OLS residual for variable i and the OLS residual for variable j or
-        np.dot(resid.T,resid)/nobs.  There should be no correction for the
+        np.dot(resid.conj().T,resid)/nobs.  There should be no correction for the
         degrees of freedom.
     nobs : int
 
@@ -416,15 +416,15 @@ def test_normality(results, signif=0.05):
        Evidence." Journal of Business & Economic Statistics
     """
     resid_c = results.resid - results.resid.mean(0)
-    sig = np.dot(resid_c.T, resid_c) / results.nobs
+    sig = np.dot(resid_c.conj().T, resid_c) / results.nobs
     Pinv = np.linalg.inv(np.linalg.cholesky(sig))
 
-    w = np.dot(Pinv, resid_c.T)
+    w = np.dot(Pinv, resid_c.conj().T)
     b1 = (w**3).sum(1)[:, None] / results.nobs
     b2 = (w**4).sum(1)[:, None] / results.nobs - 3
 
-    lam_skew = results.nobs * np.dot(b1.T, b1) / 6
-    lam_kurt = results.nobs * np.dot(b2.T, b2) / 24
+    lam_skew = results.nobs * np.dot(b1.conj().T, b1) / 6
+    lam_kurt = results.nobs * np.dot(b2.conj().T, b2) / 24
 
     lam_omni = float(lam_skew + lam_kurt)
     omni_dist = stats.chi2(results.neqs * 2)
@@ -707,7 +707,7 @@ class VAR(TimeSeriesModel):
             k_trend += exog.shape[1]
         df_resid = avobs - (self.neqs * lags + k_trend)
 
-        sse = np.dot(resid.T, resid)
+        sse = np.dot(resid.conj().T, resid)
         omega = sse / df_resid
 
         varfit = VARResults(endog, z, params, omega, lags,
@@ -1077,7 +1077,7 @@ class VARProcess(object):
         for h in range(steps):
             # Sigma(h) = Sigma(h-1) + Phi Sig_u Phi'
             phi = ma_coefs[h]
-            var = phi @ self.sigma_u @ phi.T
+            var = phi @ self.sigma_u @ phi.conj().T
             forc_covs[h] = prior = prior + var
 
         return forc_covs
@@ -1356,7 +1356,7 @@ class VARResults(VARProcess):
         Ref: Lütkepohl p.74-75
         """
         z = self.endog_lagged
-        return np.kron(np.linalg.inv(z.T @ z), self.sigma_u)
+        return np.kron(np.linalg.inv(z.conj().T @ z), self.sigma_u)
 
     def cov_ybar(self):
         r"""Asymptotically consistent estimate of covariance of the sample mean
@@ -1374,7 +1374,7 @@ class VARResults(VARProcess):
         """
 
         Ainv = np.linalg.inv(np.eye(self.neqs) - self.coefs.sum(0))
-        return Ainv @ self.sigma_u @ Ainv.T
+        return Ainv @ self.sigma_u @ Ainv.conj().T
 
     # ------------------------------------------------------------
     # Estimation-related things
@@ -1382,7 +1382,7 @@ class VARResults(VARProcess):
     @cache_readonly
     def _zz(self):
         # Z'Z
-        return np.dot(self.endog_lagged.T, self.endog_lagged)
+        return np.dot(self.endog_lagged.conj().T, self.endog_lagged)
 
     @property
     def _cov_alpha(self):
@@ -1402,7 +1402,7 @@ class VARResults(VARProcess):
         D_Kinv = np.linalg.pinv(D_K)
 
         sigxsig = np.kron(self.sigma_u, self.sigma_u)
-        return 2 * D_Kinv @ sigxsig @ D_Kinv.T
+        return 2 * D_Kinv @ sigxsig @ D_Kinv.conj().T
 
     @cache_readonly
     def llf(self):
@@ -1646,8 +1646,8 @@ class VARResults(VARProcess):
                 for j in range(h):
                     Bi = bpow(h - 1 - i)
                     Bj = bpow(h - 1 - j)
-                    mult = np.trace(Bi.T @ Ginv @ Bj @ G)
-                    om += mult * phis[i] @ sig_u @ phis[j].T
+                    mult = np.trace(Bi.conj().T @ Ginv @ Bj @ G)
+                    om += mult * phis[i] @ sig_u @ phis[j].conj().T
             omegas[h-1] = om
 
         return omegas
@@ -1818,7 +1818,7 @@ class VARResults(VARProcess):
 
         # Lütkepohl 3.6.5
         Cb = np.dot(C, vec(self.params.T))
-        middle = np.linalg.inv(C @ self.cov_params() @ C.T)
+        middle = np.linalg.inv(C @ self.cov_params() @ C.conj().T)
 
         # wald statistic
         lam_wald = statistic = Cb @ middle @ Cb
@@ -1939,9 +1939,9 @@ class VARResults(VARProcess):
         Cs = np.dot(C, vech_sigma_u)
         d = np.linalg.pinv(duplication_matrix(k))
         Cd = np.dot(C, d)
-        middle = np.linalg.inv(Cd @ np.kron(sigma_u, sigma_u) @ Cd.T) / 2
+        middle = np.linalg.inv(Cd @ np.kron(sigma_u, sigma_u) @ Cd.conj().T) / 2
 
-        wald_statistic = t * (Cs.T @ middle @ Cs)
+        wald_statistic = t * (Cs.conj().T @ middle @ Cs)
         df = num_restr
         dist = stats.chi2(df)
 
@@ -1981,7 +1981,7 @@ class VARResults(VARProcess):
         cov0_inv = np.linalg.inv(acov_list[0])
         for t in range(1, nlags+1):
             ct = acov_list[t]
-            to_add = np.trace(ct.T @ cov0_inv @ ct @ cov0_inv)
+            to_add = np.trace(ct.conj().T @ cov0_inv @ ct @ cov0_inv)
             if adjusted:
                 to_add /= (self.nobs - t)
             statistic += to_add
@@ -2168,7 +2168,7 @@ class FEVD(object):
         fevd = np.empty_like(irfs)
 
         for i in range(periods):
-            fevd[i] = (irfs[i].T / mse[i]).T
+            fevd[i] = (irfs[i].conj().T / mse[i]).conj().T
 
         # switch to equation x lag x component
         self.decomp = fevd.swapaxes(0, 1)
@@ -2248,9 +2248,9 @@ def _compute_acov(x, nlags=1):
     result = []
     for lag in range(nlags + 1):
         if lag > 0:
-            r = np.dot(x[lag:].T, x[:-lag])
+            r = np.dot(x[lag:].conj().T, x[:-lag])
         else:
-            r = np.dot(x.T, x)
+            r = np.dot(x.conj().T, x)
 
         result.append(r)
 
